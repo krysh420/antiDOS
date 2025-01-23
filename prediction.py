@@ -1,13 +1,28 @@
+import sqlite3
 import pandas as pd
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 import numpy as np
 import joblib  # For saving and loading the model
+from datetime import datetime
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from scapy.all import sniff, IP, TCP, UDP 
+from os import system
+
+db = './db/blocked_ip.db'
+con = sqlite3.connect(db)
+cur = con.cursor()
+
+blocked_ips = cur.execute("SELECT ip from blacklist")
+whitelisted_ips = cur.execute("SELECT ip from whitelist")
+
+def add_ip(ip, table):
+    current_date_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Convert to string
+    cur.execute(f"INSERT INTO {table} (ip, date_added) VALUES (?, ?)", (ip, current_date_time))
+    con.commit()
 
 # Load the trained model and encoders
 loaded_model = joblib.load("./models/knn_model.joblib")
-ohe_src_ip = joblib.load('./models/encoders/ohe_src_ip.joblib')  # Load pre-fitted encoders
+ohe_src_ip = joblib.load('./models/encoders/ohe_src_ip.joblib') # Load pre-fitted encoders
 ohe_dst_ip = joblib.load('./models/encoders/ohe_dst_ip.joblib')
 ohe_protocol = joblib.load('./models/encoders/ohe_protocol.joblib') 
 
@@ -84,12 +99,16 @@ def process_packet(packet):
         # Make prediction
         try:
             prediction = loaded_model.predict(features_encoded)
-            print(f"Prediction: {prediction[0]}")
 
-            # Implement actions based on prediction 
-            if prediction[0] == "ddos":
-                print("DDoS attack detected!")
-                # Take necessary actions (e.g., block traffic, send alert) 
+            if (prediction[0] == "ddos" and features['src_ip'] not in whitelisted_ips):
+                add_ip(features['src_ip'], 'blacklist')
+                print(f"DDoS attack detected from: {features['src_ip']}")
+                system(f'sudo ufw deny from {features["src_ip"]} to any')
+
+            elif (prediction[0] == "ddos" and features['src_ip'] in whitelisted_ips):
+                print(f"HEAVY TRAFFIC FROM WHITELISTED IP: {features['src_ip']}")
+                
+
         except ValueError as e:
             print(f"Prediction Error: {e}")
             print("Features_encoded shape:", features_encoded.shape) 
