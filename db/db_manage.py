@@ -14,7 +14,13 @@ if not exist:
 
 def add_ip(ip, table):
     current_date_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Convert to string
-    cur.execute(f"INSERT INTO {table} (ip, date_added) VALUES (?, ?)", (ip, current_date_time))
+    cur.execute(f"""
+    INSERT INTO {table} (ip, date_added)
+    SELECT ?, ?
+    WHERE NOT EXISTS (
+        SELECT 1 FROM {table} WHERE ip = ?
+    )
+""", (ip, current_date_time, ip))
     con.commit()
 
 def remove_ip(ip, table):
