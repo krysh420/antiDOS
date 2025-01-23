@@ -1,4 +1,3 @@
-sqlite
 pandas
 numpy
 scikit-learn
