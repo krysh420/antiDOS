@@ -1,4 +1,5 @@
-from scapy.all import rdpcap
+# IMPORT JUST WHAT YOU NEED
+from scapy.all import rdpcap 
 import pandas as pd
 import os
 

@@ -1,3 +1,4 @@
+# IMPORT JUST WHAT YOU NEED
 import sqlite3
 from datetime import datetime
 from os import path
