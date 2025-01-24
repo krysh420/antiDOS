@@ -109,7 +109,6 @@ Options include:
 
 This project is based on the research paper:
 - "[Distributed Denial-of-Service (DDoS) Attacks and Defense Mechanisms in Various Web-Enabled Computing Platforms](https://www.researchgate.net/publication/363114413_Distributed_Denial-of-Service_DDoS_Attacks_and_Defense_Mechanisms_in_Various_Web-Enabled_Computing_Platforms)"
-- Kaggle for providing datasets.
 
 ---
 
