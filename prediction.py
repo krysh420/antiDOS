@@ -19,7 +19,7 @@ cur = con.cursor()
 
 blocked_ips = list(cur.execute("SELECT ip from blacklist"))
 whitelisted_ips = cur.execute("SELECT ip from whitelist")
-BLOCK_COOLDOWN = 300  # 5 minutes between blocks for same IP
+BLOCK_COOLDOWN = 10
 last_block_time = defaultdict(int)
 blocked_ips = set()
 
@@ -113,27 +113,44 @@ def process_packet(packet):
         # Make prediction
         try:
             prediction = loaded_model.predict(features_encoded)
+            src_ip = features['src_ip'].strip()  # Clean IP string once
 
-            if (prediction[0] == "DDOS" and features['src_ip'] not in whitelisted_ips):
+            # Debug log for whitelist check
+            logging.debug(f"Checking IP: {src_ip}")
+            logging.debug(f"Whitelist contains: {whitelisted_ips}")
+
+            if prediction[0] == "DDOS":
+                if src_ip in whitelisted_ips:
+                    logging.info(f"Skipping whitelisted IP: {src_ip}")
+                    return
+                
                 current_time = time()
                 
                 # Check if IP was recently blocked
-                if (features['src_ip'] not in blocked_ips and 
-                    current_time - last_block_time[features['src_ip']] > BLOCK_COOLDOWN):
+                if (src_ip not in blocked_ips and 
+                    current_time - last_block_time.get(src_ip, 0) > BLOCK_COOLDOWN):
                     
                     # Update tracking
-                    blocked_ips.add(features['src_ip'])
-                    last_block_time[features['src_ip']] = current_time
+                    blocked_ips.add(src_ip)
+                    last_block_time[src_ip] = current_time
                     
                     # Log the block
-                    logging.warning(f"DDoS attack detected from: {features['src_ip']}")
+                    logging.warning(f"DDoS attack detected from: {src_ip}")
                     
                     # Add to database
-                    add_ip(features['src_ip'], 'blacklist')
+                    add_ip(src_ip, 'blacklist')
                     
                     # Block using iptables
-                    cmd = f"sudo iptables -A INPUT -s {features['src_ip']} -j DROP"
-                    result = run(cmd.split(), stdout=PIPE, stderr=PIPE)
+                    inc = f"sudo iptables -A INPUT -s {src_ip} -j DROP"
+                    out = f"sudo iptables -A OUTPUT -s {src_ip} -j DROP"
+                    result = run(inc.split(), stdout=PIPE, stderr=PIPE)
+                    
+                    if result.returncode == 0:
+                        logging.info(f"Successfully blocked IP: {features['src_ip']}")
+                    else:
+                        logging.error(f"Failed to block IP: {features['src_ip']}")
+                 
+                    result = run(out.split(), stdout=PIPE, stderr=PIPE)
                     
                     if result.returncode == 0:
                         logging.info(f"Successfully blocked IP: {features['src_ip']}")
