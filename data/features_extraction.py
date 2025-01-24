@@ -58,10 +58,10 @@ if __name__ == "__main__":
     ddos_features = []
 
     # Process benign traffic
-    process_pcap(benign_input_dir, "benign", benign_features)
+    process_pcap(benign_input_dir, "Normal", benign_features)
 
     # Process DDoS traffic
-    process_pcap(ddos_input_dir, "ddos", ddos_features)
+    process_pcap(ddos_input_dir, "DDOS", ddos_features)
 
     # Combine features into a single DataFrame
     all_features = benign_features + ddos_features

@@ -1,3 +1,4 @@
+import glob
 import pandas as pd
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
@@ -7,6 +8,12 @@ import numpy as np
 import joblib  # For saving and loading the model
 from scapy.all import rdpcap
 import os
+
+def load_all_datasets():
+    """Load and combine all CSV files from data/processed directory"""
+    all_files = glob.glob("./data/processed/*.csv")
+    combined_data = pd.concat([pd.read_csv(f) for f in all_files], ignore_index=True)
+    return combined_data.drop_duplicates()
 
 def extract_features(packet):
     """
@@ -33,7 +40,7 @@ def extract_features(packet):
         return None
 
 # Load the data
-data = pd.read_csv("./data/processed/labeled_features.csv") 
+data = load_all_datasets()
 
 # Define features and target
 X = data[["src_ip", "dst_ip", "protocol", "length", "src_port", "dst_port"]].copy() 

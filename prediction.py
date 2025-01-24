@@ -6,14 +6,21 @@ from datetime import datetime
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from scapy.all import sniff, IP, TCP, UDP 
-from os import system
+from time import time
+import logging
+from subprocess import run, PIPE
+from collections import defaultdict
+
 
 db = './db/blocked_ip.db'
 con = sqlite3.connect(db)
 cur = con.cursor()
 
-blocked_ips = cur.execute("SELECT ip from blacklist")
+blocked_ips = list(cur.execute("SELECT ip from blacklist"))
 whitelisted_ips = cur.execute("SELECT ip from whitelist")
+BLOCK_COOLDOWN = 300  # 5 minutes between blocks for same IP
+last_block_time = defaultdict(int)
+blocked_ips = set()
 
 def add_ip(ip, table):
     current_date_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Convert to string
@@ -106,15 +113,32 @@ def process_packet(packet):
         try:
             prediction = loaded_model.predict(features_encoded)
 
-            if (prediction[0] == "ddos" and features['src_ip'] not in whitelisted_ips):
-                add_ip(features['src_ip'], 'blacklist')
-                print(f"DDoS attack detected from: {features['src_ip']}")
-                system(f'sudo ufw deny from {features["src_ip"]} to any')
-
-            elif (prediction[0] == "ddos" and features['src_ip'] in whitelisted_ips):
-                print(f"HEAVY TRAFFIC FROM WHITELISTED IP: {features['src_ip']}")
+            if (prediction[0] == "DDOS" and features['src_ip'] not in whitelisted_ips):
+                current_time = time()
                 
-
+                # Check if IP was recently blocked
+                if (features['src_ip'] not in blocked_ips and 
+                    current_time - last_block_time[features['src_ip']] > BLOCK_COOLDOWN):
+                    
+                    # Update tracking
+                    blocked_ips.add(features['src_ip'])
+                    last_block_time[features['src_ip']] = current_time
+                    
+                    # Log the block
+                    logging.warning(f"DDoS attack detected from: {features['src_ip']}")
+                    
+                    # Add to database
+                    add_ip(features['src_ip'], 'blacklist')
+                    
+                    # Block using iptables
+                    cmd = f"sudo iptables -A INPUT -s {features['src_ip']} -j DROP"
+                    result = run(cmd.split(), stdout=PIPE, stderr=PIPE)
+                    
+                    if result.returncode == 0:
+                        logging.info(f"Successfully blocked IP: {features['src_ip']}")
+                    else:
+                        logging.error(f"Failed to block IP: {features['src_ip']}")
+                 
         except ValueError as e:
             print(f"Prediction Error: {e}")
             print("Features_encoded shape:", features_encoded.shape) 
